@@ -1,58 +1,56 @@
 #!/bin/bash
 set -e
 
-echo "==== [1] System aktualisieren & Hardware-Tools installieren ===="
-apt update && apt install -y pciutils lshw git wget curl unzip nano
+BASE_DIR="/workspace"           # Hauptinstallationsverzeichnis
+OLLAMA_DIR="$BASE_DIR/ollama"   # Ollama + Modelle
+VENV_DIR="$BASE_DIR/venv"       # Python Virtual Environment
+SD_DIR="$BASE_DIR/stable-diffusion-webui"  # Stable Diffusion
 
-echo "==== [2] Installiere Ollama ===="
-cd /workspace
-curl -fsSL https://ollama.com/install.sh | sh
+echo "==== [1] Systemvorbereitung ===="
+sudo apt update && sudo apt install -y \
+  pciutils lshw git wget curl unzip nano \
+  python3.11 python3.11-venv python3.11-dev
 
-echo "==== [3] Starte Ollama im Hintergrund ===="
-nohup ollama serve > /workspace/ollama.log 2>&1 &
+echo "==== [2] Ollama-Installation ===="
+mkdir -p "$OLLAMA_DIR"
+curl -L https://ollama.com/download/ollama-linux-amd64 -o "$OLLAMA_DIR/ollama"
+chmod +x "$OLLAMA_DIR/ollama"
+export OLLAMA_MODELS="$OLLAMA_DIR/models"
 
-echo "==== [4] Installiere Python 3.11 & Virtual Environment ===="
-apt update && apt install -y python3.11 python3.11-venv python3.11-dev
+# Ollama-Dienst starten
+nohup "$OLLAMA_DIR/ollama" serve > "$BASE_DIR/ollama.log" 2>&1 &
 
-echo "==== [5] Erstelle & aktiviere Python 3.11 Virtual Environment ===="
-if [ ! -d "/workspace/venv" ]; then
-    python3.11 -m venv /workspace/venv
-fi
-source /workspace/venv/bin/activate
-
-echo "==== [6] Upgrade pip & installiere Open WebUI ===="
+echo "==== [3] Python-Umgebung erstellen ===="
+python3.11 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
 pip install --upgrade pip
-pip uninstall -y pydantic  # Entferne falsche Version
-pip install "pydantic<2.0" # Installiere kompatible Version
-pip install open-webui
 
-echo "==== [7] Starte Open WebUI im Hintergrund ===="
-nohup open-webui serve --host 0.0.0.0 --port 3000 > /workspace/webui.log 2>&1 &
-sleep 5
-if ! pgrep -f "open-webui" > /dev/null; then
-    echo "❌ Open WebUI konnte nicht gestartet werden!"
-    cat /workspace/webui.log
-    exit 1
-fi
+echo "==== [4] Open WebUI installieren ===="
+pip install "pydantic<2.0" open-webui  # Automatische Versionierung
 
-echo "==== [8] Installiere AUTOMATIC1111 (Stable Diffusion WebUI) ===="
-cd /workspace
-if [ ! -d "stable-diffusion-webui" ]; then
-    git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git
-fi
-cd stable-diffusion-webui
+# Open WebUI starten
+echo "OLLAMA_BASE_URL=http://localhost:11434" > "$BASE_DIR/.env"
+nohup open-webui serve \
+  --host 0.0.0.0 \
+  --port 3000 \
+  --env-file "$BASE_DIR/.env" > "$BASE_DIR/webui.log" 2>&1 &
+
+echo "==== [5] Stable Diffusion installieren ===="
+git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git "$SD_DIR" || true
+
+# Abhängigkeiten installieren
+cd "$SD_DIR"
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 pip install -r requirements.txt
 
-echo "==== [9] Starte AUTOMATIC1111 im Hintergrund ===="
-nohup python launch.py --api --listen --port 7860 > /workspace/sd-webui.log 2>&1 &
-sleep 5
-if ! pgrep -f "launch.py" > /dev/null; then
-    echo "❌ Stable Diffusion WebUI konnte nicht gestartet werden!"
-    cat /workspace/sd-webui.log
-    exit 1
-fi
+# Stable Diffusion starten
+nohup python launch.py \
+  --api \
+  --listen \
+  --port 7860 \
+  --no-download-sd-model > "$BASE_DIR/sd-webui.log" 2>&1 &
 
-echo "==== [10] Setup abgeschlossen! ===="
-echo "✅ Open WebUI läuft auf Port 3000"
-echo "✅ AUTOMATIC1111 (Stable Diffusion WebUI) läuft auf Port 7860"
+echo "==== Installation abgeschlossen! ===="
+echo -e "\nZugangslinks:"
+echo "Open WebUI:   http://$(curl -s ifconfig.me):3000"
+echo "Stable Diffusion: http://$(curl -s ifconfig.me):7860"
