@@ -40,7 +40,7 @@ OLLAMA_BASE_URL=http://localhost:11434 nohup open-webui serve \
 echo "==== [5] Stable Diffusion installieren ===="
 git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git "$SD_DIR"
 cd "$SD_DIR"
-
+ 
 # XFormers für GPU-Optimierung installieren
 pip install xformers==0.0.24
 
