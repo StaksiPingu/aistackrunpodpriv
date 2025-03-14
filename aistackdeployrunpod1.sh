@@ -32,4 +32,4 @@ nohup python launch.py --api --listen --port 7860 > "$BASE_DIR/sd-webui.log" 2>&
 
 echo "==== Erfolgreich installiert! ===="
 echo "Open WebUI:   http://localhost:3000"
-echo "Stable Diffusion: http://localhost:7860"
+echo "Stable Diffusion: http://localhost:7860
