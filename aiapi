@@ -1,0 +1,82 @@
+#!/bin/bash
+set -e
+
+apt update && apt install -y wget openssh-server;
+# SSH einrichten
+mkdir -p ~/.ssh && chmod 700 ~/.ssh;
+echo "$PUBLIC_KEY" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys;
+service ssh start;
+
+# Basisverzeichnisse
+WORKSPACE="/workspace"
+MODEL_DIR="$WORKSPACE/models"
+OLLAMA_DIR="$WORKSPACE/ollama"
+COMFYUI_DIR="$WORKSPACE/ComfyUI"
+
+# Installieren der Grundabhängigkeiten
+apt-get update
+apt-get install -y wget git python3.10 python3.10-venv libgl1 pciutils lshw
+
+# Ollama Installation (ohne systemd)
+mkdir -p $OLLAMA_DIR
+cd $OLLAMA_DIR
+wget https://github.com/ollama/ollama/releases/download/v0.1.37/ollama-linux-amd64
+mv ollama-linux-amd64 ollama
+chmod +x ollama
+nohup $OLLAMA_DIR/ollama serve > $OLLAMA_DIR/ollama.log 2>&1 &
+
+# Automatic1111 Installation
+SD_DIR="$WORKSPACE/stable-diffusion-webui"
+git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git $SD_DIR
+
+# Python Umgebung für Automatic1111
+cd $SD_DIR
+python3.10 -m venv venv
+source venv/bin/activate
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install -r requirements.txt
+mkdir -p "$MODEL_DIR/Stable-diffusion"
+export COMMANDLINE_ARGS="--listen --api --port 7860 --ckpt-dir $MODEL_DIR/Stable-diffusion --no-download-sd-model"
+nohup ./webui.sh > $SD_DIR/webui.log 2>&1 &
+
+# ComfyUI Installation
+git clone https://github.com/comfyanonymous/ComfyUI.git $COMFYUI_DIR
+
+# Python Umgebung für ComfyUI
+cd $COMFYUI_DIR
+python3.10 -m venv venv
+source venv/bin/activate
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install -r requirements.txt
+
+# Modelle verlinken (optional)
+mkdir -p "$COMFYUI_DIR/models/checkpoints"
+ln -s "$MODEL_DIR/Stable-diffusion"/* "$COMFYUI_DIR/models/checkpoints/" 2>/dev/null || true
+
+# ComfyUI starten
+export COMFY_PORT=8188
+nohup python main.py --listen --port $COMFY_PORT > $COMFYUI_DIR/comfy.log 2>&1 &
+
+# Wartezeit für Initialisierungen
+echo "Warte auf Initialisierung (120 Sekunden)..."
+sleep 120
+
+# Teste Endpunkte
+echo -e "\n\nInstallationsstatus:"
+curl -s http://localhost:11434 && echo "✅ Ollama läuft" || echo "❌ Ollama-Fehler"
+curl -s http://localhost:7860 && echo "✅ Automatic1111 läuft" || echo "❌ Automatic1111-Fehler"
+curl -s http://localhost:$COMFY_PORT && echo "✅ ComfyUI läuft" || echo "❌ ComfyUI-Fehler"
+
+# Port-Informationen
+echo -e "\nWICHTIG: Folgende Ports in RunPod freischalten:"
+echo "- SSH: 22"
+echo "- Ollama: 11434"
+echo "- Automatic1111: 7860"
+echo "- ComfyUI: 8188"
+echo "- Optional: 3000"
+
+# API-Info
+echo -e "\nAPI Endpoints:"
+echo "Ollama API:        http://localhost:11434"
+echo "Automatic1111 API:  http://localhost:7860"
+echo "ComfyUI API:        http://localhost:8188"
