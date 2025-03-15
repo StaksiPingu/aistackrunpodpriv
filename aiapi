@@ -12,7 +12,7 @@ LOG_DIR="$WORKSPACE/logs"
 # Erstelle Verzeichnisse falls nicht vorhanden
 mkdir -p "$MODEL_DIR" "$OLLAMA_DIR" "$COMFYUI_DIR" "$SD_DIR" "$LOG_DIR"
 
-# Grundlegende Systemaktualisierung
+# 🔄 Systempakete aktualisieren
 echo "🔄 Aktualisiere Systempakete..."
 apt-get update && apt-get install -y wget git python3.10 python3.10-venv libgl1 pciutils lshw nano
 
@@ -22,11 +22,14 @@ pkill -f "ollama" || true  # Beende laufende Ollama-Instanzen
 wget -q -O "$OLLAMA_DIR/ollama" https://github.com/ollama/ollama/releases/download/v0.1.37/ollama-linux-amd64
 chmod +x "$OLLAMA_DIR/ollama"
 
-# Symlink erstellen, um Ollama von überall auszuführen
+# Symlink für globale Nutzung
 ln -sf "$OLLAMA_DIR/ollama" /usr/local/bin/ollama
 
 # Starte Ollama im Hintergrund
 nohup "$OLLAMA_DIR/ollama" serve > "$LOG_DIR/ollama.log" 2>&1 & disown
+
+# 🔥 Firewall-Regeln setzen (ermöglicht externen Zugriff)
+iptables -A INPUT -p tcp --dport 11434 -j ACCEPT || true
 
 ### 🛠 Automatic1111 Stable Diffusion WebUI ###
 echo "📥 Installiere Stable Diffusion WebUI..."
@@ -40,7 +43,7 @@ if [ "$EUID" -eq 0 ]; then
     chown -R sduser:sduser "$SD_DIR"
 fi
 
-# Python-Umgebung einrichten
+# Python-Umgebung einrichten und Abhängigkeiten installieren
 su - sduser -c "
     cd '$SD_DIR'
     python3.10 -m venv venv
@@ -48,7 +51,15 @@ su - sduser -c "
     pip install --upgrade pip
     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
     pip install -r requirements.txt
-    mkdir -p '$MODEL_DIR/Stable-diffusion'
+"
+
+# 🔥 Sicherstellen, dass der Port 7860 offen ist
+iptables -A INPUT -p tcp --dport 7860 -j ACCEPT || true
+
+# Starte WebUI im Hintergrund mit Log-Tracking
+su - sduser -c "
+    cd '$SD_DIR'
+    source venv/bin/activate
     export COMMANDLINE_ARGS='--listen --api --port 7860 --ckpt-dir $MODEL_DIR/Stable-diffusion --no-download-sd-model'
     nohup ./webui.sh > '$LOG_DIR/webui.log' 2>&1 & disown
 "
@@ -69,7 +80,10 @@ pip install -r requirements.txt
 mkdir -p "$COMFYUI_DIR/models/checkpoints"
 ln -s "$MODEL_DIR/Stable-diffusion"/* "$COMFYUI_DIR/models/checkpoints/" 2>/dev/null || true
 
-# Starte ComfyUI
+# 🔥 Sicherstellen, dass der Port 8188 offen ist
+iptables -A INPUT -p tcp --dport 8188 -j ACCEPT || true
+
+# Starte ComfyUI im Hintergrund mit Log-Tracking
 export COMFY_PORT=8188
 nohup python main.py --listen --port "$COMFY_PORT" > "$LOG_DIR/comfy.log" 2>&1 & disown
 
