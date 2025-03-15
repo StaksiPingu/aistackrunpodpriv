@@ -28,9 +28,6 @@ ln -sf "$OLLAMA_DIR/ollama" /usr/local/bin/ollama
 # Starte Ollama im Hintergrund
 nohup "$OLLAMA_DIR/ollama" serve > "$LOG_DIR/ollama.log" 2>&1 & disown
 
-# 🔥 Firewall-Regeln setzen (ermöglicht externen Zugriff)
-iptables -A INPUT -p tcp --dport 11434 -j ACCEPT || true
-
 ### 🛠 Automatic1111 Stable Diffusion WebUI ###
 echo "📥 Installiere Stable Diffusion WebUI..."
 git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git "$SD_DIR" || true
@@ -52,9 +49,6 @@ su - sduser -c "
     pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
     pip install -r requirements.txt
 "
-
-# 🔥 Sicherstellen, dass der Port 7860 offen ist
-iptables -A INPUT -p tcp --dport 7860 -j ACCEPT || true
 
 # Starte WebUI im Hintergrund mit Log-Tracking
 su - sduser -c "
@@ -80,9 +74,6 @@ pip install -r requirements.txt
 mkdir -p "$COMFYUI_DIR/models/checkpoints"
 ln -s "$MODEL_DIR/Stable-diffusion"/* "$COMFYUI_DIR/models/checkpoints/" 2>/dev/null || true
 
-# 🔥 Sicherstellen, dass der Port 8188 offen ist
-iptables -A INPUT -p tcp --dport 8188 -j ACCEPT || true
-
 # Starte ComfyUI im Hintergrund mit Log-Tracking
 export COMFY_PORT=8188
 nohup python main.py --listen --port "$COMFY_PORT" > "$LOG_DIR/comfy.log" 2>&1 & disown
@@ -97,12 +88,11 @@ curl -s http://localhost:11434 && echo "✅ Ollama läuft" || echo "❌ Ollama-F
 curl -s http://localhost:7860 && echo "✅ Automatic1111 läuft" || echo "❌ Automatic1111 Fehler"
 curl -s http://localhost:$COMFY_PORT && echo "✅ ComfyUI läuft" || echo "❌ ComfyUI Fehler"
 
-### 📌 Port-Informationen ###
+### 📌 Ports für RunPod ###
 echo -e "\n📌 Ports in RunPod freischalten:"
 echo "- Ollama: 11434"
 echo "- Automatic1111: 7860"
 echo "- ComfyUI: 8188"
-echo "- Optional: 3000"
 
 ### 🌐 API Endpoints ###
 echo -e "\n🌐 API Endpoints:"
