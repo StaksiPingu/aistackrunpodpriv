@@ -6,70 +6,74 @@ WORKSPACE="/workspace"
 MODEL_DIR="$WORKSPACE/models"
 OLLAMA_DIR="$WORKSPACE/ollama"
 COMFYUI_DIR="$WORKSPACE/ComfyUI"
-
-# Installieren der Grundabhängigkeiten
-apt-get update
-apt-get install -y wget git python3.10 python3.10-venv libgl1 pciutils lshw
-
-# Ollama Installation (ohne systemd)
-mkdir -p $OLLAMA_DIR
-cd $OLLAMA_DIR
-wget https://github.com/ollama/ollama/releases/download/v0.1.37/ollama-linux-amd64
-mv ollama-linux-amd64 ollama
-chmod +x ollama
-nohup $OLLAMA_DIR/ollama serve > $OLLAMA_DIR/ollama.log 2>&1 &
-
-# Automatic1111 Installation
 SD_DIR="$WORKSPACE/stable-diffusion-webui"
-git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git $SD_DIR
+LOG_DIR="$WORKSPACE/logs"
 
-# Python Umgebung für Automatic1111
-cd $SD_DIR
+# Erstelle Verzeichnisse falls nicht vorhanden
+mkdir -p "$MODEL_DIR" "$OLLAMA_DIR" "$COMFYUI_DIR" "$SD_DIR" "$LOG_DIR"
+
+# Grundlegende Systemaktualisierung
+echo "🔄 Aktualisiere Systempakete..."
+apt-get update && apt-get install -y wget git python3.10 python3.10-venv libgl1 pciutils lshw
+
+### Ollama Installation ###
+echo "📥 Installiere Ollama..."
+pkill -f "ollama" || true  # Falls Ollama läuft, beende es zuerst
+wget -q -O "$OLLAMA_DIR/ollama" https://github.com/ollama/ollama/releases/download/v0.1.37/ollama-linux-amd64
+chmod +x "$OLLAMA_DIR/ollama"
+nohup "$OLLAMA_DIR/ollama" serve > "$LOG_DIR/ollama.log" 2>&1 & disown
+
+### Automatic1111 Stable Diffusion WebUI ###
+echo "📥 Installiere Stable Diffusion WebUI..."
+git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git "$SD_DIR" || true
+cd "$SD_DIR"
 python3.10 -m venv venv
 source venv/bin/activate
+pip install --upgrade pip
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 pip install -r requirements.txt
-mkdir -p "$MODEL_DIR/Stable-diffusion"
+
+# Starte WebUI
 export COMMANDLINE_ARGS="--listen --api --port 7860 --ckpt-dir $MODEL_DIR/Stable-diffusion --no-download-sd-model"
-nohup ./webui.sh > $SD_DIR/webui.log 2>&1 &
+nohup ./webui.sh > "$LOG_DIR/webui.log" 2>&1 & disown
 
-# ComfyUI Installation
-git clone https://github.com/comfyanonymous/ComfyUI.git $COMFYUI_DIR
-
-# Python Umgebung für ComfyUI
-cd $COMFYUI_DIR
+### ComfyUI Installation ###
+echo "📥 Installiere ComfyUI..."
+git clone https://github.com/comfyanonymous/ComfyUI.git "$COMFYUI_DIR" || true
+cd "$COMFYUI_DIR"
 python3.10 -m venv venv
 source venv/bin/activate
+pip install --upgrade pip
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 pip install -r requirements.txt
 
-# Modelle verlinken (optional)
+# Verknüpfe Modelle
 mkdir -p "$COMFYUI_DIR/models/checkpoints"
 ln -s "$MODEL_DIR/Stable-diffusion"/* "$COMFYUI_DIR/models/checkpoints/" 2>/dev/null || true
 
-# ComfyUI starten
+# Starte ComfyUI
 export COMFY_PORT=8188
-nohup python main.py --listen --port $COMFY_PORT > $COMFYUI_DIR/comfy.log 2>&1 &
+nohup python main.py --listen --port "$COMFY_PORT" > "$LOG_DIR/comfy.log" 2>&1 & disown
 
-# Wartezeit für Initialisierungen
-echo "Warte auf Initialisierung (120 Sekunden)..."
+### Initialisierungs-Wartezeit ###
+echo "⏳ Warte auf Initialisierung (120 Sekunden)..."
 sleep 120
 
-# Teste Endpunkte
-echo -e "\n\nInstallationsstatus:"
+### Statusprüfung ###
+echo -e "\n✅ Installationsstatus:"
 curl -s http://localhost:11434 && echo "✅ Ollama läuft" || echo "❌ Ollama-Fehler"
 curl -s http://localhost:7860 && echo "✅ Automatic1111 läuft" || echo "❌ Automatic1111-Fehler"
 curl -s http://localhost:$COMFY_PORT && echo "✅ ComfyUI läuft" || echo "❌ ComfyUI-Fehler"
 
-# Port-Informationen
-echo -e "\nWICHTIG: Folgende Ports in RunPod freischalten:"
+### Port-Informationen ###
+echo -e "\n📌 Ports in RunPod freischalten:"
 echo "- Ollama: 11434"
 echo "- Automatic1111: 7860"
 echo "- ComfyUI: 8188"
 echo "- Optional: 3000"
 
-# API-Info
-echo -e "\nAPI Endpoints:"
-echo "Ollama API:        http://localhost:11434"
-echo "Automatic1111 API:  http://localhost:7860"
-echo "ComfyUI API:        http://localhost:8188"
+### API-Endpoints ###
+echo -e "\n🌐 API Endpoints:"
+echo "🔗 Ollama API:        http://localhost:11434"
+echo "🔗 Automatic1111 API:  http://localhost:7860"
+echo "🔗 ComfyUI API:        http://localhost:8188"
