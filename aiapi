@@ -1,12 +1,6 @@
 #!/bin/bash
 set -e
 
-apt update && apt install -y wget openssh-server;
-# SSH einrichten
-mkdir -p ~/.ssh && chmod 700 ~/.ssh;
-echo "$PUBLIC_KEY" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys;
-service ssh start;
-
 # Basisverzeichnisse
 WORKSPACE="/workspace"
 MODEL_DIR="$WORKSPACE/models"
@@ -69,7 +63,6 @@ curl -s http://localhost:$COMFY_PORT && echo "✅ ComfyUI läuft" || echo "❌ C
 
 # Port-Informationen
 echo -e "\nWICHTIG: Folgende Ports in RunPod freischalten:"
-echo "- SSH: 22"
 echo "- Ollama: 11434"
 echo "- Automatic1111: 7860"
 echo "- ComfyUI: 8188"
